@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
+<meta name="referrer" content="no-referrer">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Rádce">
+<meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Právní rádce</title>
+<style>
+:root{--bg:#F2F2F7;--card:#fff;--tx:#1C1C1E;--tx2:#6C6C70;--acc:#0063CC;--fill:#E3E3E8;--bad:#B3261E;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#000;--card:#1C1C1E;--tx:#fff;--tx2:#98989F;--acc:#0A6CDB;--fill:#2C2C2E;--bad:#FF8A80}}
+html,body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+#lock{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}
+#lock form{width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px;text-align:center}
+#lock img{width:72px;height:72px;border-radius:16px;margin:0 auto}
+#lock h1{margin:0;font-size:28px}
+#lock p{margin:0;color:var(--tx2);font-size:15px;line-height:21px}
+#lock input{min-height:50px;border:0;border-radius:12px;background:var(--card);color:var(--tx);font-size:17px;padding:0 14px;outline:none;box-shadow:inset 0 0 0 1px var(--fill)}
+#lock input:focus{box-shadow:0 0 0 2px var(--acc)}
+#lock button{min-height:50px;border:0;border-radius:12px;background:var(--acc);color:#fff;font-size:17px;font-weight:600}
+#lock button[disabled]{opacity:.6}
+#err{color:var(--bad)!important;min-height:21px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="lock" hidden>
+<form id="f" autocomplete="off">
+<img src="icon-180.png" alt="">
+<h1>Právní rádce</h1>
+<p>Soukromá aplikace. Zadej heslo, které jsi dostal spolu s odkazem.</p>
+<label for="pw" class="sr">Heslo</label>
+<input id="pw" type="password" placeholder="Heslo" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go" required>
+<button id="b" type="submit">Odemknout</button>
+<p id="err" role="alert"></p>
+<p style="font-size:13px">Pomocný nástroj – konečné posouzení je vždy na policistovi. Po odemčení funguje offline.</p>
+</form>
+</div>
+<script>
+(function(){
+var SALT="ExJpUJV6Gpzmev4wA26xOw==",ITER=600000;
+function b64(s){return Uint8Array.from(atob(s),function(c){return c.charCodeAt(0)})}
+function db(){return new Promise(function(ok,ko){var r=indexedDB.open("pr",1);r.onupgradeneeded=function(){r.result.createObjectStore("k")};r.onsuccess=function(){ok(r.result)};r.onerror=function(){ko(r.error)}})}
+function idb(m,v){return db().then(function(d){return new Promise(function(ok,ko){var t=d.transaction("k",m==="get"?"readonly":"readwrite"),s=t.objectStore("k"),r=m==="get"?s.get("key"):m==="put"?s.put(v,"key"):s.delete("key");r.onsuccess=function(){ok(r.result)};r.onerror=function(){ko(r.error)}})})}
+function odvod(pw){var e=new TextEncoder();return crypto.subtle.importKey("raw",e.encode(pw),"PBKDF2",false,["deriveKey"]).then(function(b){return crypto.subtle.deriveKey({name:"PBKDF2",salt:b64(SALT),iterations:ITER,hash:"SHA-256"},b,{name:"AES-GCM",length:256},true,["decrypt"])})}
+function nacti(key){return fetch("app.enc").then(function(r){if(!r.ok)throw new Error("síť");return r.arrayBuffer()}).then(function(buf){return crypto.subtle.decrypt({name:"AES-GCM",iv:new Uint8Array(buf,0,12)},key,new Uint8Array(buf,12))}).then(function(pt){spust(JSON.parse(new TextDecoder().decode(pt)))})}
+function spust(p){var st=document.createElement("style");st.textContent=p.css;document.head.appendChild(st);window.__DATA=p.data;window.__VERZE=p.verze;document.getElementById("lock").remove();var s=document.createElement("script");s.textContent=p.js;document.body.appendChild(s)}
+function uloz(key){return idb("put",key).catch(function(){return crypto.subtle.exportKey("raw",key).then(function(r){try{localStorage.setItem("pr.k",btoa(String.fromCharCode.apply(null,new Uint8Array(r))))}catch(e){}})})}
+function ulozeny(){return idb("get").catch(function(){return null}).then(function(k){if(k)return k;var r=null;try{r=localStorage.getItem("pr.k")}catch(e){}return r?crypto.subtle.importKey("raw",b64(r),"AES-GCM",true,["decrypt"]):null})}
+window.__zamknout=function(){if(!confirm("Zamknout aplikaci? Pro další otevření bude potřeba heslo."))return;try{localStorage.removeItem("pr.k")}catch(e){}idb("del").catch(function(){}).then(function(){location.reload()})};
+function zamek(){var L=document.getElementById("lock");L.hidden=false;document.getElementById("f").onsubmit=function(e){e.preventDefault();var b=document.getElementById("b"),er=document.getElementById("err");b.disabled=true;b.textContent="Odemykám…";er.textContent="";odvod(document.getElementById("pw").value).then(function(k){return nacti(k).then(function(){return uloz(k)})}).catch(function(x){er.textContent=String(x&&x.message)==="síť"?"Nepodařilo se načíst data. Zkontroluj připojení.":"Špatné heslo.";b.disabled=false;b.textContent="Odemknout"})}}
+if(!window.crypto||!crypto.subtle){document.body.innerHTML="<p style='padding:24px'>Prohlížeč nepodporuje šifrování. Otevři odkaz v Safari (https).</p>";return}
+ulozeny().then(function(k){if(!k)return zamek();return nacti(k).catch(function(){zamek()})}).catch(zamek);
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(function(){});
+})();
+</script>
+</body>
+</html>
